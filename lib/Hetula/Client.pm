@@ -6,6 +6,8 @@ our $VERSION = 'v0.001'; # Dist::Zilla::Plugin::RewriteVersion overwrites this
 #
 # Copyright 2018 National Library of Finland
 
+=encoding utf8
+
 =head1 NAME
 
 Hetula::Client - Perl client implementation to communicate with Hetula.
