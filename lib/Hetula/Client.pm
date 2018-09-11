@@ -8,7 +8,7 @@ our $VERSION = 'v0.001'; # Dist::Zilla::Plugin::RewriteVersion overwrites this
 
 =head1 NAME
 
-Hetula::Client
+Hetula::Client - Perl client implementation to communicate with Hetula.
 
 =head1 DESCRIPTION
 
