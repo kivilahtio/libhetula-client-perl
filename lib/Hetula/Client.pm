@@ -6,7 +6,7 @@ package Hetula::Client;
 
 =head1 NAME
 
-Hetula::Client
+Hetula::Client - Perl client implementation to communicate with Hetula.
 
 =head1 DESCRIPTION
 
