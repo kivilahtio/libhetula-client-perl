@@ -185,7 +185,7 @@ sub userDisableAccount($username=undef) {
   Data::Printer::p($resp);
 }
 
-sub ssnsBatchAdd($filenameIn=undef, $filenameOut=undef) {
+sub ssnsBatchAdd($filenameIn=undef, $filenameOut=undef, $batchSize=500) {
   $filenameIn = prompt_string( "Path to the ssns-file:").'' unless $filenameIn;
   $filenameOut = prompt_string("Path to the ssns results -file, leave empty for default ($filenameIn.hetula):").'' unless $filenameOut;
   unless ($filenameOut) {
@@ -193,28 +193,7 @@ sub ssnsBatchAdd($filenameIn=undef, $filenameOut=undef) {
     print "Output file defaults to '$filenameOut'";
   }
 
-  open(my $FH_IN,  "<:encoding(UTF-8)", $filenameIn)  or die("Opening the given file '$filenameIn' for reading ssns failed: $!\n");
-  open(my $FH_OUT, ">:encoding(UTF-8)", $filenameOut) or die("Opening the given file '$filenameOut' for writing ssns results failed: $!\n");
-
-  print $FH_OUT "ssnId,ssn,error\n";
-
-  my @ssns;
-  while (<$FH_IN>) {
-    chomp;
-    my @cols = split(',', $_);
-    push(@ssns, $cols[-1]);
-  }
-  my $resp = $hc->ssnsBatchAdd(\@ssns);
-
-  for (my $i=0 ; $i<@$resp ; $i++) {
-    my $res = $resp->[$i];
-    my $ssn = $ssns[$i];
-    Data::Printer::p($res);
-
-    die("Local ssns and Hetula ssns are out of sync at batch file row='$i', local ssn='$ssn', Hetula ssn='$res->{ssn}->{ssn}'?") unless ($res->{ssn}->{ssn} eq $ssn);
-
-    print $FH_OUT join(",", $res->{ssn}->{id}//'', $ssn, $res->{error}//'')."\n";
-  }
+  $hc->ssnsBatchAddFromFile($filenameIn, $filenameOut, $batchSize);
 }
 
 sub listActions {
@@ -269,9 +248,7 @@ sub __doAction($action) {
 }
 
 sub __detectKohaEnvironment($args) {
-  eval {
-    require C4::Context;
-  };
+  eval "require C4::Context;"; #This way the Dist::Zilla ::Plugin::AutoPrereqs doesn't think this is a mandatory requirement
   unless ($@) {
     print "Koha detected. ";
     if (my $url = C4::Context->config('hetula')->{url}) {

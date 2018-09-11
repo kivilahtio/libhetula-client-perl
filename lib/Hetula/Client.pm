@@ -119,7 +119,7 @@ See Hetula API doc for endpoint GET /api/v1/users/<id>
 =cut
 
 sub ssnGet($s, $params) {
-  die("Hetula::Class::BadParameter - parameter 'id' is not an integer") unless $params->{id} =~ /$RE{num}{int}/;
+  die("Hetula::Client::BadParameter - parameter 'id' is not an integer") unless $params->{id} =~ /$RE{num}{int}/;
   my $tx = $s->ua->get( $s->baseURL().'/api/v1/ssns/'.$params->{id} );
   return _handleResponse($tx);
 }
@@ -135,6 +135,85 @@ See Hetula API doc for endpoint GET /api/v1/ssns/batch
 sub ssnsBatchAdd($s, $ssnArray) {
   my $tx = $s->ua->post( $s->baseURL().'/api/v1/ssns/batch', {Accept => '*/*'}, json => $ssnArray );
   return _handleResponse($tx);
+}
+
+=head2 ssnsBatchAddChunked
+
+Invokes the ssnsBatchAdd()-method repeatedly in small chunks. Useful for
+importing an inconveniently large amount of ssns that would otherwise timeout
+the Hetula-server.
+
+ @param1 {sub} Receives a feeder callback, which sends ssn-lists to the
+               ssnsBatchAdd()-method.
+               for ex.
+                sub {
+                  #Keep sending ssns while there are ssns to send
+                  return ['ssn1','ssn2','ssn3'] if @ssns;
+                  #When ssns run out, return false to signal the end of transmission
+                  return undef || [];
+                }
+
+ @param2 {sub} Receives a digester callback, which receives the ssnsBatchAdd()-methods
+               response|return value.
+               for ex.
+                sub {
+                  my ($ssnReportsFromHetula) = @_;
+                  print $FH_OUT "$_->{ssn}->{id},$_->{ssn}->{ssn},$_->{error}\n" for @$ssnReportsFromHetula;
+                }
+
+=cut
+
+sub ssnsBatchAddChunked($s, $feederCallback, $digesterCallback) {
+  while (my $ssns = $feederCallback->()) {
+    last unless($ssns && @$ssns);
+    $digesterCallback->($s->ssnsBatchAdd($ssns))
+  }
+}
+
+=head2 ssnsBatchAddFromFile
+
+Wrapper for ssnsBatchAddChunked(), where this manages the file IO as well.
+
+ @param1 {filepath} Where to read ssns from
+ @param2 {filepath} Where to write the ssn results
+
+=cut
+
+sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
+  open(my $FH_IN,  "<:encoding(UTF-8)", $filenameIn)  or die("Hetula::Client::File - Opening the given file '$filenameIn' for reading ssns failed: $!\n");
+  open(my $FH_OUT, ">:encoding(UTF-8)", $filenameOut) or die("Hetula::Client::File - Opening the given file '$filenameOut' for writing ssns results failed: $!\n");
+
+  print $FH_OUT "ssnId,ssn,error\n";
+
+  my @ssns;
+  my $feeder = sub { #Feeds ssns to the batch grinder
+    @ssns = ();
+    while (<$FH_IN>) {
+      chomp;
+      my @cols = split(',', $_);
+      push(@ssns, $cols[-1]);
+      last if @ssns >= $batchSize;
+    }
+    return \@ssns;
+  };
+  my $digester = sub { #digests ssn reports from Hetula
+    my ($ssnReports) = @_;
+
+    if (ref($ssnReports) ne 'ARRAY') { #There is something wrong!
+      Data::Printer::p($ssnReports);
+      return;
+    }
+
+    for (my $i=0 ; $i<@$ssnReports ; $i++) {
+      my $res = $ssnReports->[$i];
+      my $ssn = $ssns[$i];
+
+      die("Hetula::Client::SSN - Local ssns and Hetula ssns are out of sync at batch file row='$i', local ssn='$ssn', Hetula ssn='$res->{ssn}->{ssn}'?") unless ($res->{ssn}->{ssn} eq $ssn);
+
+      print $FH_OUT join(",", $res->{ssn}->{id}//'', $ssn, $res->{error}//'')."\n";
+    }
+  };
+  $s->ssnsBatchAddChunked($feeder, $digester);
 }
 
 =head3 userAdd
@@ -199,7 +278,7 @@ See Hetula API doc for endpoint PUT /api/v1/users/<id>
 
 sub userMod($s, $params) {
   my $id = $params->{id} || $params->{username};
-  die("Hetula::Class::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
+  die("Hetula::Client::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
   my $tx = $s->ua->put( $s->baseURL()."/api/v1/users/$id", {Accept => '*/*'}, json => $params );
   return _handleResponse($tx);
 }
@@ -213,8 +292,8 @@ sub userMod($s, $params) {
 
 sub userChangePassword($s, $params) {
   my $id = $params->{id} || $params->{username};
-  die("Hetula::Class::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
-  die("Hetula::Class::BadParameter - parameter 'password' is missing") unless $params->{password};
+  die("Hetula::Client::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
+  die("Hetula::Client::BadParameter - parameter 'password' is missing") unless $params->{password};
   my $tx = $s->ua->put( $s->baseURL()."/api/v1/users/$id/password", {Accept => '*/*'}, json => $params );
   return _handleResponse($tx);
 }
@@ -229,7 +308,7 @@ To recover from a disabled account, change the password
 
 sub userDisableAccount($s, $params) {
   my $id = $params->{id} || $params->{username};
-  die("Hetula::Class::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
+  die("Hetula::Client::BadParameter - parameter 'id' or 'username' is missing") unless ($id);
   my $tx = $s->ua->delete( $s->baseURL()."/api/v1/users/$id/password", {Accept => '*/*'} );
   return _handleResponse($tx);
 }

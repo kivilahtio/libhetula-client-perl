@@ -6,9 +6,11 @@ use Modern::Perl '2018';
 #use feature qw(signatures);
 #no warnings qw(experimental::signatures);
 
-use Test::Most tests => 10;
+use Test::Most tests => 11;
 
 use Mojolicious;
+use File::Slurp;
+use File::Temp;
 
 use Hetula::Client;
 
@@ -74,6 +76,16 @@ $resp = $hc->userChangePassword({username => $username, password => $password});
 ok(! $resp->{error}, "User change password succeeded");
 
 
+subtest "ssnsBatchAddFromFile()", sub {
+  plan tests => 11;
+  my ($FH, $tempFilename) = File::Temp::tempfile();
+  $resp = $hc->ssnsBatchAddFromFile("$FindBin::Bin/ssns.txt", $tempFilename, 3);
+  ok(1, "SSNs added from file");
+  my $report = File::Slurp::read_file($tempFilename);
+  like($report, qr/ssn$_/, "ssn$_ reported") for 0..9;
+};
+
+
 sub mockServer {
   my ($hc) = @_;
   $hc->{baseURL} = '';
@@ -124,7 +136,14 @@ sub mockServer {
     my $jsonParams = $c->req->json;
     if (ref($jsonParams) eq 'ARRAY') {
       my $id = 1;
-      my @jsonParams = map {{ssn => $_, id => $id++}} @$jsonParams;
+      my @jsonParams = map {
+        if ($id++ % 3) {
+          {status => 200, ssn => {ssn => $_, id => $id}};
+        }
+        else {
+          {status => 400, error => 'invalid ssn', ssn => {ssn => $_}};
+        }
+      } @$jsonParams;
       $c->render(status => '200', json => \@jsonParams);
     }
     else {
