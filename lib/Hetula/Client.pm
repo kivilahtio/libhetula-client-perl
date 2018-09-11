@@ -4,6 +4,8 @@ package Hetula::Client;
 #
 # Copyright 2018 National Library of Finland
 
+=encoding utf8
+
 =head1 NAME
 
 Hetula::Client - Perl client implementation to communicate with Hetula.
