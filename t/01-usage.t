@@ -6,7 +6,7 @@ use Modern::Perl '2018';
 #use feature qw(signatures);
 #no warnings qw(experimental::signatures);
 
-use Test::Most tests => 14;
+use Test::Most tests => 15;
 
 use Mojolicious;
 use File::Slurp;
@@ -19,18 +19,23 @@ use Hetula::Client;
 #$ENV{MOJO_INSECURE} = 1;
 $ENV{MOJO_LOG_LEVEL} = 'info';
 
+## Get credentials to use. Alternatively one can temporarily test with real credentials this predesigned test suite.
 my $realCredentials = 0;
+my $credentialsFile = "$FindBin::Bin/credentials";
+my @credentials = File::Slurp::read_file($credentialsFile, chomp => 1);
 
-my $username     = 'kalifi';
-my $password     = 'pass';
-my $organization = 'Administratoria';
-my $baseURL      = 'https://hetula.example.com';
+my $username     = $credentials[0];
+my $password     = $credentials[1];
+my $organization = $credentials[2];
+my $baseURL      = $credentials[3];
 if ($realCredentials) { #test with real credentials here
   $username     = '';
   $password     = '';
   $organization = '';
   $baseURL      = '';
 }
+## Credentials dealt with.
+
 
 my $hc = Hetula::Client->new({baseURL => $baseURL});
 mockServer($hc) unless $realCredentials;
@@ -74,6 +79,16 @@ ok(! $resp->{error}, "User disable account succeeded");
 
 $resp = $hc->userChangePassword({username => $username, password => $password});
 ok(! $resp->{error}, "User change password succeeded");
+
+
+subtest "New Hetula::Client with a credentials file", sub {
+  plan tests => 1;
+  my $hc = Hetula::Client->new({baseURL => $baseURL, credentials => $credentialsFile});
+  mockServer($hc) unless $realCredentials;
+
+  $resp = $hc->login();
+  ok(! $resp->{error}, "Login success");
+};
 
 
 subtest "ssnsBatchAddFromFile()", sub {

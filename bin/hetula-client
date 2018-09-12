@@ -112,9 +112,9 @@ if ($args{listActions}) {
   exit 0;
 }
 
-__slurpCredentials($args{credentials}, \%args) if $args{credentials};
+Hetula::Client::slurpCredentials($args{credentials}, \%args) if $args{credentials};
 
-__detectKohaEnvironment(\%args); #If using Koha, try to get the configurations from Koha's config
+Hetula::Client::_detectKohaEnvironment(\%args); #If using Koha, try to get the configurations from Koha's config
 
 
 $args{username}     = prompt_string(  "Hetula username:").''     unless $args{username};
@@ -236,7 +236,7 @@ sub __doAction($action) {
   $action = $parts[0];
   my @params = @{$parts[1]};
 
-  print "Doing action '$action'".(@params ? "with parameters '@params'" : "")."\n";
+  print "Doing action '$action'".(@params ? " with parameters '@params'" : "")."\n";
   my $sub = __PACKAGE__->can($action);
   if ($sub) {
     eval {$sub->(@params)};
@@ -250,35 +250,4 @@ sub __doAction($action) {
     print "Action '$action' is not possible!\n";
     return 1;
   }
-}
-
-sub __detectKohaEnvironment($args) {
-  eval "require C4::Context;"; #This way the Dist::Zilla ::Plugin::AutoPrereqs doesn't think this is a mandatory requirement
-  unless ($@) {
-    print "Koha detected. ";
-    if (my $url = C4::Context->config('hetula')->{url}) {
-        $args->{baseURL} = $url;
-        print "Hetula baseURL found '$url'. ";
-    }
-    else {
-        die "KOHA_CONF: hetula->url is missing!" unless $url;
-    }
-
-    if (my $org = C4::Context->config('hetula')->{organization}) {
-        $args->{organization} = $org;
-        print "Hetula organization found '$org'.\n";
-    }
-    else {
-        die "KOHA_CONF: hetula->organization is missing!";
-    }
-  };
-}
-
-sub __slurpCredentials($credentialsFile, $injectHere=undef) {
-  open(my $FH, '<:encoding(UTF-8)', $credentialsFile) or die("Couldn't read '$credentialsFile': $!");
-  my $username     = <$FH>; chomp($username);     $injectHere->{username}     = $username     if $username && $injectHere;
-  my $password     = <$FH>; chomp($password);     $injectHere->{password}     = $password     if $password && $injectHere;
-  my $organization = <$FH>; chomp($organization); $injectHere->{organization} = $organization if $organization && $injectHere;
-  my $baseURL      = <$FH>; chomp($baseURL);      $injectHere->{baseURL}      = $baseURL      if $baseURL && $injectHere;
-  return ($username, $password, $organization, $baseURL);
 }

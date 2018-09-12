@@ -52,10 +52,14 @@ use Data::Printer;
 =head3 new
 
  @param1 {HASHRef} baseURL => https://hetula.example.com
+                   credentials => filepath, Where to load the credentials file.
+                                  see slurpCredentials() for more info.
 
 =cut
 
 sub new($class, $params) {
+  slurpCredentials($params->{credentials}, $params) if ($params->{credentials});
+  _detectKohaEnvironment($params);
   die("Hetula::Client::BadParam - parameter 'baseURL' is missing") unless $params->{baseURL};
   die("Hetula::Client::BadParam - parameter 'baseURL' '$params->{baseURL}' is not a valid URI") unless $params->{baseURL} =~ /$RE{URI}{HTTP}{-scheme=>qr!https?!}/;
 
@@ -71,9 +75,17 @@ sub new($class, $params) {
 
 See Hetula API doc for endpoint POST /api/v1/auth
 
+ @param1 {HASHRef} username => String || undef if given via credentials during construction,
+                   password => String || undef if given via credentials during construction,
+                   organization => String || undef if given via credentials during construction,
+
 =cut
 
-sub login($s, $params) {
+sub login($s, $params={}) {
+  $params->{username} = $s->{username} unless $params->{username};
+  $params->{password} = $s->{password} unless $params->{password};
+  $params->{organization} = $s->{organization} unless $params->{organization};
+
   my $tx = $s->ua->post( $s->baseURL().'/api/v1/auth', {Accept => '*/*'}, json => $params );
   my $json = _handleResponse($tx);
   return $json if $json->{error};
@@ -192,6 +204,7 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
 
   print $FH_OUT "ssnId,ssn,error,context\n";
 
+  my $i = 0; #Keep track of how many ssns are processed.
   my $retry = 0;
   my @ssns;
   my @context;
@@ -200,6 +213,7 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
       @ssns = ();
       @context = ();
       while (<$FH_IN>) {
+        $i++;
         chomp;
         my @cols = split(',', $_);
         push(@ssns, pop(@cols)); #The last value is expected to be the ssn
@@ -207,6 +221,13 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
         last if @ssns >= $batchSize;
       }
     }
+    if (@ssns) {
+      print __PACKAGE__."::ssnsBatchAddFromFile() :> '$i' ssns fed.\n";
+    }
+    else {
+      print __PACKAGE__."::ssnsBatchAddFromFile() :> All '$i' ssns fed.\n";
+    }
+
     return \@ssns;
   };
   my $digester = sub { #digests ssn reports from Hetula
@@ -234,6 +255,7 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
                               @{$context[$i]} #Add what is left of the given file columns as a context for the ssn report file. This makes it easier for possible next processing steps in the migration pipeline.
                         )."\n";
     }
+    print __PACKAGE__."::ssnsBatchAddFromFile() :> '$i' reports digested.\n";
   };
   $s->ssnsBatchAddChunked($feeder, $digester);
 }
@@ -335,6 +357,34 @@ sub userDisableAccount($s, $params) {
   return _handleResponse($tx);
 }
 
+=head2 HELPERS
+
+=head3 slurpCredentials
+@static
+
+Reads the contents of a credentials file.
+
+The credentials file must consist of up to 4 lines, with each line
+specifying the following commandline argument replacements:
+  username
+  password
+  organization
+  url
+
+ @param1 {String} Path to the credentials file
+ @param2 {HASHRef} Optional, HASHRef where to inject the found credentials
+
+=cut
+
+sub slurpCredentials($credentialsFile, $injectHere=undef) {
+  open(my $FH, '<:encoding(UTF-8)', $credentialsFile) or die("Couldn't read '$credentialsFile': $!");
+  my $username     = <$FH>; if ($username)     { chomp($username);     $injectHere->{username}     = $username     if $username && $injectHere; }
+  my $password     = <$FH>; if ($password)     { chomp($password);     $injectHere->{password}     = $password     if $password && $injectHere; }
+  my $organization = <$FH>; if ($organization) { chomp($organization); $injectHere->{organization} = $organization if $organization && $injectHere; }
+  my $baseURL      = <$FH>; if ($baseURL)      { chomp($baseURL);      $injectHere->{baseURL}      = $baseURL      if $baseURL && $injectHere; }
+  return ($username, $password, $organization, $baseURL);
+}
+
 =head2 ATTRIBUTES
 
 =head3 ua
@@ -371,6 +421,37 @@ sub _handleResponse($tx) {
     }
     return $error;
   }
+}
+
+## @static
+## If you are using https://koha-community.org/
+## Hetula::Client tries to pick configurations from there automatically.
+##
+sub _detectKohaEnvironment($params) {
+  eval "use C4::Context;"; #This way the Dist::Zilla ::Plugin::AutoPrereqs doesn't think this is a mandatory requirement
+  unless ($@) {
+    print "Koha detected. ";
+    if (my $hetulaConfig = C4::Context->config('hetula')) {
+      if (my $url = $hetulaConfig->{url}) {
+          $params->{baseURL} = $url unless $params->{baseURL};
+          print "Hetula baseURL found '$url'. ";
+      }
+      else {
+          die "KOHA_CONF: hetula->url is missing!" unless $url;
+      }
+
+      if (my $org = $hetulaConfig->{organization}) {
+          $params->{organization} = $org unless $params->{organization};
+          print "Hetula organization found '$org'.\n";
+      }
+      else {
+          die "KOHA_CONF: hetula->organization is missing!";
+      }
+    }
+    else {
+      die("Koha detected, but 'hetula' is not configured in the \$KOHA_CONF='$ENV{KOHA_CONF}'");
+    }
+  };
 }
 
 1;
