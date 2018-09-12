@@ -174,8 +174,13 @@ sub ssnsBatchAddChunked($s, $feederCallback, $digesterCallback) {
 
 Wrapper for ssnsBatchAddChunked(), where this manages the file IO as well.
 
- @param1 {filepath} Where to read ssns from
- @param2 {filepath} Where to write the ssn results
+ @param1 {filepath} Where to read ssns from.
+                    This can be a simple .csv-file, in this case the last (or only)
+                    column is expected to be one containing the ssn that is
+                    intended to be migrated to Hetula.
+                    If there are any extra columns, they are appended to the
+                    ssn report/result .csv-file as ssn report context.
+ @param2 {filepath} Where to write the ssn migration results/reports
 
 =cut
 
@@ -183,15 +188,18 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
   open(my $FH_IN,  "<:encoding(UTF-8)", $filenameIn)  or die("Hetula::Client::File - Opening the given file '$filenameIn' for reading ssns failed: $!\n");
   open(my $FH_OUT, ">:encoding(UTF-8)", $filenameOut) or die("Hetula::Client::File - Opening the given file '$filenameOut' for writing ssns results failed: $!\n");
 
-  print $FH_OUT "ssnId,ssn,error\n";
+  print $FH_OUT "ssnId,ssn,error,context\n";
 
   my @ssns;
+  my @context;
   my $feeder = sub { #Feeds ssns to the batch grinder
     @ssns = ();
+    @context = ();
     while (<$FH_IN>) {
       chomp;
       my @cols = split(',', $_);
-      push(@ssns, $cols[-1]);
+      push(@ssns, pop(@cols)); #The last value is expected to be the ssn
+      push(@context, \@cols); #always push the context, even if cols is empty. This makes sure the order of contexts is preserved!
       last if @ssns >= $batchSize;
     }
     return \@ssns;
@@ -210,7 +218,9 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
 
       die("Hetula::Client::SSN - Local ssns and Hetula ssns are out of sync at batch file row='$i', local ssn='$ssn', Hetula ssn='$res->{ssn}->{ssn}'?") unless ($res->{ssn}->{ssn} eq $ssn);
 
-      print $FH_OUT join(",", $res->{ssn}->{id}//'', $ssn, $res->{error}//'')."\n";
+      print $FH_OUT join(",", $res->{ssn}->{id}//'', $ssn, $res->{error}//'',
+                              @{$context[$i]} #Add what is left of the given file columns as a context for the ssn report file. This makes it easier for possible next processing steps in the migration pipeline.
+                        )."\n";
     }
   };
   $s->ssnsBatchAddChunked($feeder, $digester);

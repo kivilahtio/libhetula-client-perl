@@ -55,11 +55,14 @@ If you have problems with the SSL certificate not being accepted, you can
 bypass some of Mojolicious' checks with
   MOJO_INSECURE=1
 
+For more information, see
+  perldoc Hetula::Client
+
   -a --action String
       Instead of using the built-in menu, trigger a single action from the
       commandline.
       Give the action name with the necessary parameters,
-      eg. ssnsBatchAdd(/tmp/ssns.txt,/tmp/ssns.results.txt)
+      eg. ssnsBatchAddFromFile(/tmp/ssns.txt,/tmp/ssns.results.txt)
           userDisableAccount(username)
 
   -c --credentials File
@@ -139,14 +142,14 @@ if ($args{action}) {
 
 my $menu = {
   'Add a new user' => {
-    'basic'                => 'userBasicAdd',
-    'with read permission' => 'userReadAdd',
+    'basic'                       => 'userBasicAdd',
+    'with read permission'        => 'userReadAdd',
   },
-  'Batch import ssns' => 'ssnsBatchAdd',
-  'Change password'   => 'userChangePassword',
-  'Disable account'   => 'userDisableAccount',
-  'Exit'              => 'Exit',
-  'List actions'      => 'listActions',
+  'Batch import ssns from file' => 'ssnsBatchAddFromFile',
+  'Change password'             => 'userChangePassword',
+  'Disable account'             => 'userDisableAccount',
+  'Exit'                        => 'Exit',
+  'List actions'                => 'listActions',
 };
 while (1) {
   my $action = prompt_string("Choose action:", -menu => $menu);
@@ -185,7 +188,7 @@ sub userDisableAccount($username=undef) {
   Data::Printer::p($resp);
 }
 
-sub ssnsBatchAdd($filenameIn=undef, $filenameOut=undef, $batchSize=500) {
+sub ssnsBatchAddFromFile($filenameIn=undef, $filenameOut=undef, $batchSize=500) {
   $filenameIn = prompt_string( "Path to the ssns-file:").'' unless $filenameIn;
   $filenameOut = prompt_string("Path to the ssns results -file, leave empty for default ($filenameIn.hetula):").'' unless $filenameOut;
   unless ($filenameOut) {

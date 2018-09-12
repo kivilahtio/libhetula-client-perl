@@ -6,7 +6,7 @@ use Modern::Perl '2018';
 #use feature qw(signatures);
 #no warnings qw(experimental::signatures);
 
-use Test::Most tests => 11;
+use Test::Most tests => 12;
 
 use Mojolicious;
 use File::Slurp;
@@ -83,6 +83,17 @@ subtest "ssnsBatchAddFromFile()", sub {
   ok(1, "SSNs added from file");
   my $report = File::Slurp::read_file($tempFilename);
   like($report, qr/ssn$_/, "ssn$_ reported") for 0..9;
+};
+
+
+subtest "ssnsBatchAddFromFile() with context", sub {
+  plan tests => 21;
+  my ($FH, $tempFilename) = File::Temp::tempfile();
+  $resp = $hc->ssnsBatchAddFromFile("$FindBin::Bin/ssnsWithContext.txt", $tempFilename, 3);
+  ok(1, "SSNs added from file");
+  my $report = File::Slurp::read_file($tempFilename);
+  like($report, qr/ssn$_/sm, "ssn$_ reported") for 0..9;
+  like($report, qr/,$_{3},$_{4}$/sm, "context $_ preserved and appended") for 0..9;
 };
 
 
