@@ -1,5 +1,7 @@
 #!/usr/bin/env perl
 
+our $VERSION = 'v0.001'; # Dist::Zilla::Plugin::RewriteVersion overwrites this
+
 # Copyright 2018 National Library of Finland
 # This file is part of Hetula.
 #

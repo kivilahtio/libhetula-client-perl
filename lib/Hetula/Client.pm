@@ -1,5 +1,7 @@
 package Hetula::Client;
 
+our $VERSION = 'v0.001'; # Dist::Zilla::Plugin::RewriteVersion overwrites this
+
 # ABSTRACT: Interface with Hetula
 #
 # Copyright 2018 National Library of Finland

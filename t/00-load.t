@@ -3,6 +3,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 
 use Test::Most;
+use Test::Compile;
 
 use File::Find;
 
@@ -27,9 +28,8 @@ sub testLib {
 
 sub testBin {
   my ($filename) = @_;
-  `perl -cw -I$searchDir $filename`;
-  my $exitCode = ${^CHILD_ERROR_NATIVE} >> 8;
-  ok(not($exitCode), "$filename");
+  my $testCompile = Test::Compile->new();
+  ok($testCompile->pl_file_compiles($filename), "$filename");
 }
 
 done_testing();
