@@ -6,7 +6,7 @@ use Modern::Perl '2018';
 #use feature qw(signatures);
 #no warnings qw(experimental::signatures);
 
-use Test::Most tests => 12;
+use Test::Most tests => 14;
 
 use Mojolicious;
 use File::Slurp;
@@ -97,6 +97,36 @@ subtest "ssnsBatchAddFromFile() with context", sub {
 };
 
 
+subtest "ssnsBatchAddFromFile() with context, using error recovery", sub {
+  $ENV{MOCK_BAD_CONNECTION} = 1;
+  plan tests => 21;
+
+  my ($FH, $tempFilename) = File::Temp::tempfile();
+  $resp = $hc->ssnsBatchAddFromFile("$FindBin::Bin/ssnsWithContext.txt", $tempFilename, 3);
+  ok(1, "SSNs added from file");
+  my $report = File::Slurp::read_file($tempFilename);
+  like($report, qr/ssn$_/sm, "ssn$_ reported") for 0..9;
+  like($report, qr/,$_{3},$_{4}$/sm, "context $_ preserved and appended") for 0..9;
+
+  $ENV{MOCK_BAD_CONNECTION} = 0;
+};
+
+
+subtest "ssnsBatchAddFromFile(), no connection...", sub {
+  $ENV{MOCK_NO_CONNECTION} = 1;
+  $ENV{MOCK_BAD_CONNECTION} = 1;
+  plan tests => 2;
+
+  my ($FH, $tempFilename) = File::Temp::tempfile();
+  throws_ok( sub { $hc->ssnsBatchAddFromFile("$FindBin::Bin/ssnsWithContext.txt", $tempFilename, 3) }, qr/Hetula::Client::Connection.+?3/, "Retried some times and then died");
+  my $report = File::Slurp::read_file($tempFilename);
+  is($report, "ssnId,ssn,error,context\n", "Report file is empty");
+
+  $ENV{MOCK_NO_CONNECTION} = 0;
+  $ENV{MOCK_BAD_CONNECTION} = 0;
+};
+
+
 sub mockServer {
   my ($hc) = @_;
   $hc->{baseURL} = '';
@@ -145,6 +175,12 @@ sub mockServer {
   $r->post('/api/v1/ssns/batch' => sub {
     my ($c) = @_;
     my $jsonParams = $c->req->json;
+    if ($ENV{MOCK_NO_CONNECTION}) {
+      return $c->render(status => '500', text => 'Bad connectiong mocked');
+    }
+    if ($ENV{MOCK_BAD_CONNECTION} && (not($ENV{MOCK_BAD_CONNECTION_RETRIES}) || time % 2)) { #Every other second, the connection is bad, but atleast once
+      return $c->render(status => '500', text => 'Bad connectiong mocked');
+    }
     if (ref($jsonParams) eq 'ARRAY') {
       my $id = 1;
       my @jsonParams = map {

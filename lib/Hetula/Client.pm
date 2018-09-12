@@ -190,17 +190,20 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
 
   print $FH_OUT "ssnId,ssn,error,context\n";
 
+  my $retry = 0;
   my @ssns;
   my @context;
   my $feeder = sub { #Feeds ssns to the batch grinder
-    @ssns = ();
-    @context = ();
-    while (<$FH_IN>) {
-      chomp;
-      my @cols = split(',', $_);
-      push(@ssns, pop(@cols)); #The last value is expected to be the ssn
-      push(@context, \@cols); #always push the context, even if cols is empty. This makes sure the order of contexts is preserved!
-      last if @ssns >= $batchSize;
+    if ($retry == 0) { #Do not reset the input if retrying
+      @ssns = ();
+      @context = ();
+      while (<$FH_IN>) {
+        chomp;
+        my @cols = split(',', $_);
+        push(@ssns, pop(@cols)); #The last value is expected to be the ssn
+        push(@context, \@cols); #always push the context, even if cols is empty. This makes sure the order of contexts is preserved!
+        last if @ssns >= $batchSize;
+      }
     }
     return \@ssns;
   };
@@ -209,8 +212,15 @@ sub ssnsBatchAddFromFile($s, $filenameIn, $filenameOut, $batchSize=500) {
 
     if (ref($ssnReports) ne 'ARRAY') { #There is something wrong!
       Data::Printer::p($ssnReports);
-      return;
+      $retry++;
+
+      sleep($ENV{MOCK_BAD_CONNECTION}||10); #Wait a bit, maybe the pipi goes away.
+      $ENV{MOCK_BAD_CONNECTION_RETRIES} = $retry if $ENV{MOCK_BAD_CONNECTION}; #Awkwardly mix test hooks here, sorry about that.
+
+      return if $retry <= 3;
+      die("Hetula::Client::Connection - Retried '".($retry-1)."' times, but still cannot succeed. Sorry... Exception from Hetula: ".Data::Printer::np($ssnReports));
     }
+    $retry = 0; #Presumably we have succeeded in something here.
 
     for (my $i=0 ; $i<@$ssnReports ; $i++) {
       my $res = $ssnReports->[$i];
