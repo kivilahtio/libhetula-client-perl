@@ -412,7 +412,7 @@ sub _handleResponse($tx) {
       print "Request success:\n";
       Data::Printer::p($res->json);
     }
-    return $res->json;
+    return $res->json || { OK => $tx->res->code };
   }
   else {
     my $error = $tx->error;
