@@ -1,5 +1,7 @@
 package Hetula::Client;
 
+use Modern::Perl '2015';
+
 our $VERSION = 'v0.001'; # Dist::Zilla::Plugin::RewriteVersion overwrites this
 
 # ABSTRACT: Interface with Hetula
