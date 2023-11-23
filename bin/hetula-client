@@ -139,7 +139,7 @@ print "Login to organization '$args{organization}' succeeded\n";
 
 if ($args{action}) {
   my $ok = __doAction($args{action});
-  exit $ok ? 0 : 1;
+  exit($ok ? 0 : 1);
 }
 
 my $menu = {
